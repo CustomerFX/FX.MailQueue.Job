@@ -1,0 +1,6 @@
+Installation
+
+1. To install, simply download and install the bundle Customer FX Mail Queue Job
+2. Once installed, open the Job Portal in Application Architect and view the schedule for FX.MailQueue.Job.
+3. Click the schedule's "Configure" button and enter your SMTP settings. See included image "ConfigureMailQueue.Job.png".
+4. Deploy the Job Service Portal
