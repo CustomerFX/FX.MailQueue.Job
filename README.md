@@ -20,7 +20,7 @@ mail.Body = "This is a test e-mail";
 mail.RecordForContactId = "CXXXX0000001";
 
 // optional, attach a file
-mail.AttachmentPath = @"C:\\SomeFolder\SomeFile.pdf";
+mail.AttachmentPath = @"C:\SomeFolder\SomeFile.pdf";
 
 mail.Save();
 // now the mail will be sent
