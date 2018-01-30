@@ -50,6 +50,7 @@ namespace FX.MailQueue
                 const string invalidMsg = "The MailQueue job settings are invalid. Configure the job to set SMTP settings";
                 SetProgress("Error", invalidMsg);
                 log.Error(invalidMsg);
+                return;
             }
 
             var mailList = EntityFactory.GetRepository<IMailQueue>().FindAll();
