@@ -3,10 +3,9 @@ A Job for Infor CRM that allows sending e-mails by simply adding records to a Ma
 
 ## Installation
 1. To install, simply download and install the bundle [Customer FX Mail Queue Job](https://github.com/CustomerFX/FX.MailQueue.Job/raw/master/deliverable/Customer%20FX%20Mail%20Queue%20Job.zip)
-2. Once installed, open the Job Portal in Application Architect and view the schedule for FX.MailQueue.Job. 
-3. Click the schedule's "Configure" button and enter your SMTP settings. See image below:
+2. Locate the "FXMailQueue.config" file in the root of the Job Service portal's Support Files
+3. Double-click the FXMailQueue.config to open it. Edit the file to add your SMTP settings, then save
 4. Deploy the Job Service Portal
-![Configure MailQueue](https://raw.githubusercontent.com/CustomerFX/FX.MailQueue.Job/master/deliverable/docs/ConfigureMailQueueJob.png)
 
 ## Usage 
 To use, simply add a record to the MailQueue table. This can be done directly in SQL or using the entity model. For example: 

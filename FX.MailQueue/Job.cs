@@ -3,6 +3,8 @@ using System.ComponentModel;
 using System.IO;
 using System.Net;
 using System.Net.Mail;
+using System.Reflection;
+using System.Xml;
 using Quartz;
 using Sage.Entity.Interfaces;
 using Sage.Platform;
@@ -19,32 +21,29 @@ namespace FX.MailQueue
 
         public Job() : base()
         {
+            Enabled = true;
             SmtpPort = 25;
             SmtpUseSSL = false;
-            SmtpDefaultFromAddress = "none@none.com";
+            DefaultFromAddress = "no-reply@email.com";
         }
 
-        #region SMTP Settings
-        [DisplayName("SMTP Server"), Description("The SMTP server address")]
-        public string SmtpServer { get; set; }
-        [DisplayName("SMTP User Name"), Description("The SMTP user to authenticate with")]
-        public string SmtpUser { get; set; }
-        [DisplayName("SMTP Password"), Description("The password for the SMTP User")]
-        public string SmtpPassword { get; set; }
-
-        [DisplayName("SMTP Port"), Description("The SMTP server port. Default is 25")]
-        public int SmtpPort { get; set; } = 25;
-        [DisplayName("SMTP Use SSL"), Description("Whether to use SSL for the SMTP connection")]
-        public bool SmtpUseSSL { get; set; }
-
-        [DisplayName("Default From Address"), Description("Indicates the default from address if not provided on the MailQueue record.")]
-        public string SmtpDefaultFromAddress { get; set; }
+        #region Configuration Settings
+        private bool Enabled { get; set; }
+        private string SmtpServer { get; set; }
+        private string SmtpUser { get; set; }
+        private string SmtpPassword { get; set; }
+        private int SmtpPort { get; set; } = 25;
+        private bool SmtpUseSSL { get; set; }
+        private string DefaultFromAddress { get; set; }
         #endregion 
 
         protected override void OnExecute()
         {
-            SetProgress("Initializing");
+            LoadConfiguration();
+            if (!Enabled) return;
 
+            SetProgress("Initializing");
+            
             if (!ValidateSettings())
             {
                 const string invalidMsg = "The MailQueue job settings are invalid. Configure the job to set SMTP settings";
@@ -53,13 +52,13 @@ namespace FX.MailQueue
                 return;
             }
 
-            var mailList = EntityFactory.GetRepository<IMailQueue>().FindAll();
+            var mailQueue = EntityFactory.GetRepository<IMailQueue>().FindAll();
 
             var current = 0;
             var errors = 0;
-            var total = mailList.Count;
+            var total = mailQueue.Count;
 
-            foreach (var mailItem in mailList)
+            foreach (var queueItem in mailQueue)
             {
                 current++;
                 SetProgress("Processing", "Processing E-mail Queue", current, total);
@@ -68,14 +67,14 @@ namespace FX.MailQueue
                 {
                     var mail = new MailMessage();
 
-                    mail.From = new MailAddress(mailItem.FromAddress ?? SmtpDefaultFromAddress);
-                    mail.To.Add(mailItem.ToAddress);
-                    mail.Subject = mailItem.Subject;
-                    mail.Body = mailItem.Body;
-                    mail.IsBodyHtml = mailItem.IsHtml ?? false;
+                    mail.From = new MailAddress((string.IsNullOrEmpty(queueItem.FromAddress) ? queueItem.FromAddress : DefaultFromAddress));
+                    mail.To.Add(queueItem.ToAddress);
+                    mail.Subject = queueItem.Subject;
+                    mail.Body = queueItem.Body;
+                    mail.IsBodyHtml = queueItem.IsHtml ?? false;
 
-                    if (string.IsNullOrEmpty(mailItem.AttachmentPath) && File.Exists(mailItem.AttachmentPath))
-                        mail.Attachments.Add(new Attachment(mailItem.AttachmentPath));
+                    if (string.IsNullOrEmpty(queueItem.AttachmentPath) && File.Exists(queueItem.AttachmentPath))
+                        mail.Attachments.Add(new Attachment(queueItem.AttachmentPath));
 
                     var smtp = new SmtpClient(SmtpServer, SmtpPort);
 
@@ -89,21 +88,21 @@ namespace FX.MailQueue
                 }
                 catch (Exception ex)
                 {
-                    mailItem.ErrorResult = "Error: " + ex.Message;
-                    mailItem.Save();
+                    queueItem.ErrorResult = "Error: " + ex.Message;
+                    queueItem.Save();
 
                     errors++;
-                    log.Error("Error e-mail for MailQueue ID " + mailItem.Id, ex);
+                    log.Error("Error e-mail for MailQueue ID " + queueItem.Id, ex);
                     continue;
                 }
 
-                mailItem.ErrorResult = string.Empty;
-                mailItem.MailQueueProcessed();
+                queueItem.ErrorResult = string.Empty;
+                queueItem.MailQueueProcessed();
 
-                if (!string.IsNullOrEmpty(mailItem.RecordForContactId))
-                    RecordForContact(mailItem);
+                if (!string.IsNullOrEmpty(queueItem.RecordForContactId))
+                    RecordForContact(queueItem);
 
-                mailItem.Delete();
+                queueItem.Delete();
             }
 
             log.Info("Processed " + total + " E-mails");
@@ -154,6 +153,31 @@ namespace FX.MailQueue
                 || string.IsNullOrEmpty(SmtpUser) 
                 || string.IsNullOrEmpty(SmtpPassword)
             );
+        }
+
+        private void LoadConfiguration()
+        {
+            var config = new XmlDocument();
+            config.Load(ConfigFile);
+            
+            Enabled = Convert.ToBoolean(config.SelectSingleNode("FXMailQueue/Enabled").InnerText);
+            SmtpServer = config.SelectSingleNode("FXMailQueue/SmtpServer").InnerText;
+            SmtpUser = config.SelectSingleNode("FXMailQueue/SmtpUser").InnerText;
+            SmtpPassword = config.SelectSingleNode("FXMailQueue/SmtpPassword").InnerText;
+            SmtpPort = Convert.ToInt32(config.SelectSingleNode("FXMailQueue/SmtpPort").InnerText);
+            SmtpUseSSL = Convert.ToBoolean(config.SelectSingleNode("FXMailQueue/SmtpUseSSL").InnerText);
+            DefaultFromAddress = config.SelectSingleNode("FXMailQueue/DefaultFromAddress").InnerText;
+
+        }
+
+        private static string ConfigFile
+        {
+            get
+            {
+                var codeBase = Assembly.GetExecutingAssembly().CodeBase;
+                var path = Path.GetDirectoryName(Uri.UnescapeDataString(new UriBuilder(codeBase).Path));
+                return Path.Combine(Directory.GetParent(path).FullName, "FXMailQueue.config");
+            }
         }
     }
 }
