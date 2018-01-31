@@ -46,7 +46,7 @@ namespace FX.MailQueue
             
             if (!ValidateSettings())
             {
-                const string invalidMsg = "The MailQueue job settings are invalid. Configure the job to set SMTP settings";
+                const string invalidMsg = "The MailQueue job configuration is invalid. Edit the FXMailQueue.config in the job portal to set SMTP settings.";
                 SetProgress("Error", invalidMsg);
                 log.Error(invalidMsg);
                 return;
@@ -149,25 +149,31 @@ namespace FX.MailQueue
         private bool ValidateSettings()
         {
             return (
-                string.IsNullOrEmpty(SmtpServer) 
-                || string.IsNullOrEmpty(SmtpUser) 
-                || string.IsNullOrEmpty(SmtpPassword)
+                !string.IsNullOrEmpty(SmtpServer) 
+                && !string.IsNullOrEmpty(SmtpUser) 
+                && !string.IsNullOrEmpty(SmtpPassword)
             );
         }
 
         private void LoadConfiguration()
         {
-            var config = new XmlDocument();
-            config.Load(ConfigFile);
-            
-            Enabled = Convert.ToBoolean(config.SelectSingleNode("FXMailQueue/Enabled").InnerText);
-            SmtpServer = config.SelectSingleNode("FXMailQueue/SmtpServer").InnerText;
-            SmtpUser = config.SelectSingleNode("FXMailQueue/SmtpUser").InnerText;
-            SmtpPassword = config.SelectSingleNode("FXMailQueue/SmtpPassword").InnerText;
-            SmtpPort = Convert.ToInt32(config.SelectSingleNode("FXMailQueue/SmtpPort").InnerText);
-            SmtpUseSSL = Convert.ToBoolean(config.SelectSingleNode("FXMailQueue/SmtpUseSSL").InnerText);
-            DefaultFromAddress = config.SelectSingleNode("FXMailQueue/DefaultFromAddress").InnerText;
+            try
+            {
+                var config = new XmlDocument();
+                config.Load(ConfigFile);
 
+                Enabled = Convert.ToBoolean(config.SelectSingleNode("FXMailQueue/Enabled").InnerText);
+                SmtpServer = config.SelectSingleNode("FXMailQueue/SmtpServer").InnerText;
+                SmtpUser = config.SelectSingleNode("FXMailQueue/SmtpUser").InnerText;
+                SmtpPassword = config.SelectSingleNode("FXMailQueue/SmtpPassword").InnerText;
+                SmtpPort = Convert.ToInt32(config.SelectSingleNode("FXMailQueue/SmtpPort").InnerText);
+                SmtpUseSSL = Convert.ToBoolean(config.SelectSingleNode("FXMailQueue/SmtpUseSSL").InnerText);
+                DefaultFromAddress = config.SelectSingleNode("FXMailQueue/DefaultFromAddress").InnerText;
+            }
+            catch (Exception ex)
+            {
+                log.Error("Error loading configuration file " + ConfigFile, ex);
+            }
         }
 
         private static string ConfigFile
