@@ -150,8 +150,6 @@ namespace FX.MailQueue
         {
             return (
                 !string.IsNullOrEmpty(SmtpServer) 
-                && !string.IsNullOrEmpty(SmtpUser) 
-                && !string.IsNullOrEmpty(SmtpPassword)
             );
         }
 
