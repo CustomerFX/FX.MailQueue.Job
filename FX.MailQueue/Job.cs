@@ -201,11 +201,7 @@ namespace FX.MailQueue
 
         private string GetConfigValue(XmlDocument ConfigDoc, string Setting, object DefaultValue = null)
         {
-            var value = string.Empty;
-
-            var node = ConfigDoc.SelectSingleNode("FXMailQueue/" + Setting);
-            if (node != null) value = node.InnerText;
-
+            var value = ConfigDoc.SelectSingleNode("FXMailQueue/" + Setting)?.InnerText;
             return !string.IsNullOrEmpty(value) ? value : (DefaultValue?.ToString() ?? string.Empty);
         }
 
