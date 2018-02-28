@@ -11,7 +11,7 @@ A Job for Infor CRM that allows sending e-mails by simply adding records to a Ma
 To use, simply add a record to the MailQueue table. This can be done directly in SQL or using the entity model. For example: 
 ```csharp
 var mail = Sage.Platform.EntityModel.Create<Sage.Entity.Interfaces.IMailQueue>();
-mail.ToAddress = "some@email.com"; // can be mulitple recipients, comma-delimited 
+mail.ToAddress = "some@email.com"; // can be multiple recipients, comma or semi-colon delimited 
 mail.FromAddress = "another@email.com";
 mail.Subject = "Test Email";
 mail.Body = "This is a test e-mail";
@@ -21,6 +21,9 @@ mail.RecordForContactId = "CXXXX0000001";
 
 // optional, attach a file
 mail.AttachmentPath = @"C:\SomeFolder\SomeFile.pdf";
+
+// optional, delay sending until a specific date/time
+mail.DelayUntil = DateTime.Now.AddMinutes(30);
 
 mail.Save();
 // now the mail will be sent

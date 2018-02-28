@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Net;
@@ -9,6 +10,7 @@ using Quartz;
 using Sage.Entity.Interfaces;
 using Sage.Platform;
 using Sage.Platform.Scheduling;
+using System.Linq;
 
 namespace FX.MailQueue
 {
@@ -21,10 +23,6 @@ namespace FX.MailQueue
 
         public Job() : base()
         {
-            Enabled = true;
-            SmtpPort = 25;
-            SmtpUseSSL = false;
-            DefaultFromAddress = "no-reply@email.com";
         }
 
         #region Configuration Settings
@@ -35,7 +33,8 @@ namespace FX.MailQueue
         private int SmtpPort { get; set; } = 25;
         private bool SmtpUseSSL { get; set; }
         private string DefaultFromAddress { get; set; }
-        #endregion 
+        private int MaxErrorAttempts { get; set; }
+        #endregion
 
         protected override void OnExecute()
         {
@@ -56,6 +55,7 @@ namespace FX.MailQueue
 
             var current = 0;
             var errors = 0;
+            var errorsDesc = string.Empty;
             var total = mailQueue.Count;
 
             foreach (var queueItem in mailQueue)
@@ -63,12 +63,20 @@ namespace FX.MailQueue
                 current++;
                 SetProgress("Processing", "Processing E-mail Queue", current, total);
 
+                // check for max error attempts
+                if (MaxErrorAttempts > 0 && queueItem.ErrorAttempts.HasValue && queueItem.ErrorAttempts.Value > MaxErrorAttempts) continue;
+
+                // check for delayed send
+                if (queueItem.DelayUntil.HasValue && queueItem.DelayUntil.Value > DateTime.Now) continue;
+
                 try
                 {
                     var mail = new MailMessage();
 
-                    mail.From = new MailAddress((string.IsNullOrEmpty(queueItem.FromAddress) ? queueItem.FromAddress : DefaultFromAddress));
-                    mail.To.Add(queueItem.ToAddress);
+                    mail.From = new MailAddress((!string.IsNullOrEmpty(queueItem.FromAddress) ? queueItem.FromAddress : DefaultFromAddress));
+                    
+                    foreach (var addr in GetToAddressList(queueItem.ToAddress)) mail.To.Add(addr);
+
                     mail.Subject = queueItem.Subject;
                     mail.Body = queueItem.Body;
                     mail.IsBodyHtml = queueItem.IsHtml ?? false;
@@ -88,14 +96,17 @@ namespace FX.MailQueue
                 }
                 catch (Exception ex)
                 {
+                    if (!string.IsNullOrEmpty(errorsDesc)) errorsDesc += ", ";
+                    errorsDesc += ex.Message + " (MailQueueID:" + queueItem + ")";
                     queueItem.ErrorResult = "Error: " + ex.Message;
+                    queueItem.ErrorAttempts = (queueItem.ErrorAttempts + 1 ?? 1);
                     queueItem.Save();
 
                     errors++;
                     log.Error("Error e-mail for MailQueue ID " + queueItem.Id, ex);
                     continue;
                 }
-
+                
                 queueItem.ErrorResult = string.Empty;
                 queueItem.MailQueueProcessed();
 
@@ -106,7 +117,19 @@ namespace FX.MailQueue
             }
 
             log.Info("Processed " + total + " E-mails");
-            SetProgress((errors == 0 ? "Complete" : "Error"), "Job complete. Processed " + (total-errors) + " e-mails with " + errors + " errors.", 100, 100);
+            SetProgress((errors == 0 ? "Complete" : "Error"), "Job complete. Processed " + (total-errors) + " e-mails with " + errors + " errors." + (!string.IsNullOrEmpty(errorsDesc) ? " Errors: " + errorsDesc : string.Empty), 100, 100);
+        }
+
+        private IList<string> GetToAddressList(string ToAddress)
+        {
+            IList<string> list = new List<string>();
+            if (string.IsNullOrEmpty(ToAddress)) return list;
+
+            if (ToAddress.Contains(",")) list = ToAddress.Split(',');
+            else if (ToAddress.Contains(";")) list = ToAddress.Split(';');
+            else list.Add(ToAddress);
+
+            return list.Select(x => x.Trim()).ToList();
         }
 
         private void RecordForContact(IMailQueue mail)
@@ -160,18 +183,30 @@ namespace FX.MailQueue
                 var config = new XmlDocument();
                 config.Load(ConfigFile);
 
-                Enabled = Convert.ToBoolean(config.SelectSingleNode("FXMailQueue/Enabled").InnerText);
-                SmtpServer = config.SelectSingleNode("FXMailQueue/SmtpServer").InnerText;
-                SmtpUser = config.SelectSingleNode("FXMailQueue/SmtpUser").InnerText;
-                SmtpPassword = config.SelectSingleNode("FXMailQueue/SmtpPassword").InnerText;
-                SmtpPort = Convert.ToInt32(config.SelectSingleNode("FXMailQueue/SmtpPort").InnerText);
-                SmtpUseSSL = Convert.ToBoolean(config.SelectSingleNode("FXMailQueue/SmtpUseSSL").InnerText);
-                DefaultFromAddress = config.SelectSingleNode("FXMailQueue/DefaultFromAddress").InnerText;
+                Enabled = Convert.ToBoolean(GetConfigValue(config, "Enabled", true));
+                SmtpServer = GetConfigValue(config, "SmtpServer", string.Empty);
+                SmtpUser = GetConfigValue(config, "SmtpUser", string.Empty);
+                SmtpPassword = GetConfigValue(config, "SmtpPassword", string.Empty);
+                SmtpPort = Convert.ToInt32(GetConfigValue(config, "SmtpPort", 25));
+                SmtpUseSSL = Convert.ToBoolean(GetConfigValue(config, "SmtpUseSSL", false));
+                DefaultFromAddress = GetConfigValue(config, "DefaultFromAddress", "no-reply@fxmailqueue.com");
+                MaxErrorAttempts = Convert.ToInt32(GetConfigValue(config, "MaxErrorAttempts", -1));
             }
             catch (Exception ex)
             {
                 log.Error("Error loading configuration file " + ConfigFile, ex);
+                throw;
             }
+        }
+
+        private string GetConfigValue(XmlDocument ConfigDoc, string Setting, object DefaultValue = null)
+        {
+            var value = string.Empty;
+
+            var node = ConfigDoc.SelectSingleNode("FXMailQueue/" + Setting);
+            if (node != null) value = node.InnerText;
+
+            return !string.IsNullOrEmpty(value) ? value : (DefaultValue?.ToString() ?? string.Empty);
         }
 
         private static string ConfigFile
