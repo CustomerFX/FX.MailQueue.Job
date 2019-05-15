@@ -81,7 +81,7 @@ namespace FX.MailQueue
                     mail.Body = queueItem.Body;
                     mail.IsBodyHtml = queueItem.IsHtml ?? false;
 
-                    if (string.IsNullOrEmpty(queueItem.AttachmentPath) && File.Exists(queueItem.AttachmentPath))
+                    if (!string.IsNullOrEmpty(queueItem.AttachmentPath) && File.Exists(queueItem.AttachmentPath))
                         mail.Attachments.Add(new Attachment(queueItem.AttachmentPath));
 
                     var smtp = new SmtpClient(SmtpServer, SmtpPort);
