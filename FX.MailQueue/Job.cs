@@ -71,27 +71,36 @@ namespace FX.MailQueue
 
                 try
                 {
-                    var mail = new MailMessage();
+                    using (var mail = new MailMessage())
+                    {
+                        mail.From = new MailAddress((!string.IsNullOrEmpty(queueItem.FromAddress) ? queueItem.FromAddress : DefaultFromAddress));
 
-                    mail.From = new MailAddress((!string.IsNullOrEmpty(queueItem.FromAddress) ? queueItem.FromAddress : DefaultFromAddress));
-                    
-                    foreach (var addr in GetToAddressList(queueItem.ToAddress)) mail.To.Add(addr);
+                        foreach (var addr in GetToAddressList(queueItem.ToAddress)) mail.To.Add(addr);
 
-                    mail.Subject = queueItem.Subject;
-                    mail.Body = queueItem.Body;
-                    mail.IsBodyHtml = queueItem.IsHtml ?? false;
+                        mail.Subject = queueItem.Subject;
+                        mail.Body = queueItem.Body;
+                        mail.IsBodyHtml = queueItem.IsHtml ?? false;
 
-                    if (!string.IsNullOrEmpty(queueItem.AttachmentPath) && File.Exists(queueItem.AttachmentPath))
-                        mail.Attachments.Add(new Attachment(queueItem.AttachmentPath));
+                        if (!string.IsNullOrEmpty(queueItem.AttachmentPath) && File.Exists(queueItem.AttachmentPath))
+                            mail.Attachments.Add(new Attachment(queueItem.AttachmentPath));
 
-                    var smtp = new SmtpClient(SmtpServer, SmtpPort);
+                        var smtp = new SmtpClient(SmtpServer, SmtpPort);
 
-                    if (!string.IsNullOrEmpty(SmtpUser))
-                        smtp.Credentials = new NetworkCredential(SmtpUser, SmtpPassword);
+                        if (!string.IsNullOrEmpty(SmtpUser))
+                            smtp.Credentials = new NetworkCredential(SmtpUser, SmtpPassword);
 
-                    smtp.EnableSsl = SmtpUseSSL;
+                        smtp.EnableSsl = SmtpUseSSL;
 
-                    smtp.Send(mail);
+                        smtp.Send(mail);
+                    }
+
+                    queueItem.ErrorResult = string.Empty;
+                    queueItem.MailQueueProcessed();
+
+                    if (!string.IsNullOrEmpty(queueItem.RecordForContactId))
+                        RecordForContact(queueItem);
+
+                    queueItem.Delete();
 
                 }
                 catch (Exception ex)
@@ -106,14 +115,6 @@ namespace FX.MailQueue
                     log.Error("Error e-mail for MailQueue ID " + queueItem.Id, ex);
                     continue;
                 }
-                
-                queueItem.ErrorResult = string.Empty;
-                queueItem.MailQueueProcessed();
-
-                if (!string.IsNullOrEmpty(queueItem.RecordForContactId))
-                    RecordForContact(queueItem);
-
-                queueItem.Delete();
             }
 
             log.Info("Processed " + total + " E-mails");
