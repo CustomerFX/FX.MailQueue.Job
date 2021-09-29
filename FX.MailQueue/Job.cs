@@ -64,7 +64,7 @@ namespace FX.MailQueue
                 SetProgress("Processing", "Processing E-mail Queue", current, total);
 
                 // check for max error attempts
-                if (MaxErrorAttempts > 0 && queueItem.ErrorAttempts.HasValue && queueItem.ErrorAttempts.Value > MaxErrorAttempts) continue;
+                if (MaxErrorAttempts > 0 && queueItem.ErrorAttempts.HasValue && queueItem.ErrorAttempts.Value >= MaxErrorAttempts) continue;
 
                 // check for delayed send
                 if (queueItem.DelayUntil.HasValue && queueItem.DelayUntil.Value > DateTime.Now) continue;
@@ -130,7 +130,7 @@ namespace FX.MailQueue
             else if (ToAddress.Contains(";")) list = ToAddress.Split(';');
             else list.Add(ToAddress);
 
-            return list.Select(x => x.Trim()).ToList();
+            return list.Select(x => x.Trim()).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
         }
 
         private void RecordForContact(IMailQueue mail)
